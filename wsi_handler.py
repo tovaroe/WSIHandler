@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 from PIL import Image, ImageDraw
 from skimage.measure import label, regionprops
 from scipy.ndimage import binary_erosion
+import numpy as np
 
 from wsi_utils import *
 
@@ -79,11 +80,15 @@ class WSIHandler():
         thumbnail = self.get_thumbnail()
         
         cd = colour_deconvolution(thumbnail, 'HE')+1e-9
-        mask = binary_erosion(((cd[:,:,0]/2. + cd[:,:,1]/2.)/cd[:,:,2]) < 0.93)
-        mask = bw_filter_area(mask, min_area)
+        
+        mask = (cd[:,:,0]/cd[:,:,2] < 0.85) + (cd[:,:,1]/cd[:,:,2] < 0.95)
+        
+        #mask = binary_erosion(((cd[:,:,0]/2. + cd[:,:,1]/2.)/cd[:,:,2]) < 0.93)
+        
+        #mask = bw_filter_area(mask, min_area)
         return mask
         
-    def obtain_tissue_mask(self, min_area = 100, segment_tissue=True, read_ndpa=True):
+    def obtain_tissue_mask(self, min_area = 20, segment_tissue=True, read_ndpa=True):
         #always uses minimal magnification
         if segment_tissue:
             tissue_mask = self.segment_tissue(min_area)
@@ -92,20 +97,33 @@ class WSIHandler():
         
         #Todo: think more cases in terms of including different annotations here
         tissue_mask[ndpa_mask > 0] = False
+        
+        tissue_mask = binary_erosion(tissue_mask)
         tissue_mask = bw_filter_area(tissue_mask, min_area)
+        
         self.tissue_mask = tissue_mask
         return self.tissue_mask
         
-    def save_tissue_mask(self, path):
-        if not self.tissue_mask:
-            self.obtain_tissue_mask()
-        
-        self.tissue_mask
+    def load_tissue_mask(self, path=None):
+        if path==None:
+            path_trunk = '\\'.join(self.WSI_path.split('\\')[:-1])
+            filename = self.WSI_path.split('\\')[-1].replace('.ndpi', '.npy')
+            path = '\\'.join([path_trunk, 'tissue_masks', 'numpy', filename])
+        self.tissue_mask = np.load(path)
+        return self.tissue_mask
       
-    def get_random_tile(self, magnification, width, height):
-        if tissue_mask:
-            pass
-        pass
+    def get_random_tile(self, magnification=20, width=256, height=256):
+        assert not self.tissue_mask is None, "Please obtain tissue mask first"
+        
+        size = (width, height)
+        rng = np.random.default_rng()
+        downsample = float(self.WSI.properties[openslide.PROPERTY_NAME_OBJECTIVE_POWER])/magnification
+        level = self.WSI.get_best_level_for_downsample(downsample)
+        
+        coordinates = np.argwhere(self.tissue_mask)
+        coords = np.flip(rng.choice(coordinates)*256) + np.random.choice(int(magnification/0.15625), 2)
+          
+        return self.WSI.read_region(coords, level, size)
         
     def get_thumbnail(self, magnification = 0.15625):
         # magnification 0.15625 corresponds to downsample = 256 with 40x objective power
