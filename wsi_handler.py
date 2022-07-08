@@ -163,11 +163,12 @@ class WSIHandler():
         size = (width, height)
         rng = np.random.default_rng()
         downsample = float(self.WSI.properties[openslide.PROPERTY_NAME_OBJECTIVE_POWER])/magnification
+        tm_factor = int(np.round(float(self.WSI.properties[openslide.PROPERTY_NAME_OBJECTIVE_POWER])/0.15625))
         level = self.WSI.get_best_level_for_downsample(downsample)
         
         coordinates = np.argwhere(self.tissue_mask)
-        coords = np.flip(rng.choice(coordinates)*256) + np.random.choice(int(magnification/0.15625), 2)
-          
+        coords = np.flip(rng.choice(coordinates)*tm_factor) + np.random.choice(int(magnification/0.15625), 2)
+                 
         return self.WSI.read_region(coords, level, size).convert('RGB')
         
     def get_thumbnail(self):
