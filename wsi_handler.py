@@ -79,7 +79,7 @@ class WSIHandler():
         return mask
         
     def read_svs_annotation(self, magnification=0.15625):
-        # Reads all annoations layers with name == "Layer 1" or "Tumor"
+        # Reads all annoations layers with name == "", "Layer 1" or "Tumor"
         annotation_path = self.WSI_path.replace('.svs', '.xml')
         assert os.path.exists(annotation_path), f"annotation file not found. Given path: {annotation_path}"
         xml_tree = ET.parse(annotation_path)
@@ -93,7 +93,7 @@ class WSIHandler():
         polymask = Image.new('L', (width, height), 0)
         
         for annotation in xml_tree.getroot().findall("./Annotation"):
-            if annotation.attrib['Name'] in ['Layer 1', 'Tumor']:
+            if annotation.attrib['Name'] in ['', 'Layer 1', 'Tumor']:
                 regions = annotation.findall("./Regions/Region")
                 for region in regions:
                     if region.attrib['Type'] == '0': # take only freehand annotation            
@@ -158,6 +158,7 @@ class WSIHandler():
         return self.tissue_mask
       
     def get_random_tile(self, magnification=20, width=256, height=256):
+        ### !!! BUGGY FOR (SOME) SVS FILES???
         assert not self.tissue_mask is None, "Please obtain tissue mask first"
         
         size = (width, height)
@@ -177,7 +178,7 @@ class WSIHandler():
         downsample = int(self.WSI.properties[openslide.PROPERTY_NAME_OBJECTIVE_POWER])/magnification
         
         if self.vendor == 'aperio':
-            # workaround for few downsmaple levels in svs files
+            # workaround for few downsample levels in svs files
             thumbnail_size = np.array(self.WSI.dimensions)/downsample
         elif self.vendor == 'hamamatsu':
             thumbnail_size = self.WSI.level_dimensions[self.WSI.get_best_level_for_downsample(downsample)]
@@ -190,20 +191,21 @@ class WSIHandler():
         # yields consecutive tiles and corresponding coords in downsampled tissue_mask
         
         size = (width, height)
-        px_conversion_factor = magnification / 0.15625 # thumbnail magnification
-        downsample_factor = np.int64(np.array((height, width))/px_conversion_factor)
+        px_conversion_factor = np.int64(magnification / 0.15625) # thumbnail magnification
+        downsample_factor = np.int64(np.array(size)/px_conversion_factor)
         downsample = float(self.WSI.properties[openslide.PROPERTY_NAME_OBJECTIVE_POWER])/magnification
         level = self.WSI.get_best_level_for_downsample(downsample)
         
         # build correct tissue mask
-        tissue_mask_downsampled = resize(maximum_filter(self.tissue_mask, size=downsample_factor), np.array(self.tissue_mask.shape)/downsample_factor)
+        tissue_mask_downsampled = resize(maximum_filter(self.tissue_mask, size=downsample_factor).astype(np.float32), np.round(np.array(self.tissue_mask.shape)/downsample_factor)) > 0.5
         self.tissue_mask_tile_generator = tissue_mask_downsampled.copy()
         coordinates = np.argwhere(tissue_mask_downsampled) 
         
         # iterate through coordinates & yield tiles
-        
+        tedious_factor = int(downsample/(np.round(self.WSI.level_downsamples)[level]))
+
         for coords_orig in coordinates:
-            coords = np.flip(coords_orig*256*np.int64(downsample_factor))
-            yield (self.WSI.read_region(coords, level, size).convert('RGB'), coords_orig)
-    
+            coords = np.flip(coords_orig*px_conversion_factor*downsample_factor*tedious_factor)
+            yield (self.WSI.read_region(coords, level, np.array(size)*tedious_factor).convert('RGB').resize(size), coords_orig)
+
     
