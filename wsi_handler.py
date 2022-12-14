@@ -124,9 +124,6 @@ class WSIHandler():
         
         mask = (cd[:,:,0]/cd[:,:,2] < 0.85) + (cd[:,:,1]/cd[:,:,2] < 0.95)
         
-        #mask = binary_erosion(((cd[:,:,0]/2. + cd[:,:,1]/2.)/cd[:,:,2]) < 0.93)
-        
-        #mask = bw_filter_area(mask, min_area)
         return mask
         
     def obtain_tissue_mask(self, min_area = 20, annotation_handling='exclude'):
@@ -205,7 +202,7 @@ class WSIHandler():
         tedious_factor = int(downsample/(np.round(self.WSI.level_downsamples)[level]))
 
         for coords_orig in coordinates:
-            coords = np.flip(coords_orig*px_conversion_factor*downsample_factor*tedious_factor)
+            coords = np.flip(coords_orig*px_conversion_factor*downsample_factor*int(downsample)) # downsample was tedious_factor
             yield (self.WSI.read_region(coords, level, np.array(size)*tedious_factor).convert('RGB').resize(size), coords_orig)
 
     
