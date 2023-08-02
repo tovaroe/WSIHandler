@@ -4,9 +4,13 @@ Implements the reading of WSI (ndpi or svs), their respective annotations, can c
 
 # Dependencies
 openslide python 1.2.0 : https://github.com/openslide/openslide-python
+
 scipy 1.6.2
+
 pillow 7.2.0
+
 scikit-image 0.18.1
+
 numpy 1.20.2
 
 # Usage
