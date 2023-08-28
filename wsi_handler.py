@@ -155,7 +155,7 @@ class WSIHandler():
         return self.tissue_mask
       
     def get_random_tile(self, magnification=20, width=256, height=256):
-        ### !!! BUGGY FOR (SOME) SVS FILES???
+        ### Should now also work for all svs files
         assert not self.tissue_mask is None, "Please obtain tissue mask first"
         
         size = (width, height)
